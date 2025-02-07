@@ -16,7 +16,7 @@ type Source struct {
 	Command string
 }
 
-func StartMetricsCollection(config MetricsConfig,pids map[int]int) {
+func StartMetricsCollection(config MetricsConfig, pids map[int]int) {
 	if !config.Enabled {
 		fmt.Println("Metrics collection is disabled.")
 		return
@@ -29,11 +29,11 @@ func StartMetricsCollection(config MetricsConfig,pids map[int]int) {
 		for _, source := range config.Sources {
 			switch source.Type {
 			case "cpu":
-				getCPUMetrics()
+				getCPUMetrics(pids)
 			case "memory":
-				getMemoryMetrics()
+				getMemoryMetrics(pids)
 			case "disk":
-				getDiskMetrics()
+				getDiskMetrics(pids)
 			default:
 				fmt.Printf("Unknown metric type: %s\n", source.Type)
 			}
