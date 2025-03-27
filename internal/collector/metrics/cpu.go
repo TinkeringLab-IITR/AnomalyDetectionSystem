@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
 	"time"
 )
 
@@ -16,7 +17,6 @@ func getCPUMetrics(pids map[int]int) {
 		fmt.Printf("Collecting cpu metrics for pid : %d, port:%d \n", pid, port)
 		GetCPUStat(pid)
 	}
-
 }
 
 func GetCPUStat(pid int) {

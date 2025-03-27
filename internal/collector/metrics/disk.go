@@ -16,6 +16,7 @@ func getDiskMetrics(pids map[int]int) {
 		}
 		fmt.Printf("Dis Usage : %d bytes \n", DiskUsage)
 	}
+	
 }
 
 func getDiskUsage(pid int) (int64, error) {

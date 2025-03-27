@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -21,22 +22,36 @@ func StartMetricsCollection(config MetricsConfig, pids map[int]int) {
 		fmt.Println("Metrics collection is disabled.")
 		return
 	}
-
+	var wg sync.WaitGroup
+	
 	ticker := time.NewTicker(time.Duration(config.Interval) * time.Second)
 	defer ticker.Stop()
-
+	//wg.Add(3)
 	for range ticker.C {
 		for _, source := range config.Sources {
 			switch source.Type {
 			case "cpu":
-				getCPUMetrics(pids)
+				wg.Add(1) 
+				go func(){ 
+					defer wg.Done()
+					getCPUMetrics(pids)
+				}()
 			case "memory":
-				getMemoryMetrics(pids)
+				wg.Add(1)
+				go func(){ 
+					defer wg.Done()
+					getMemoryMetrics(pids)
+				}()
 			case "disk":
-				getDiskMetrics(pids)
+					wg.Add(1)
+					go func(){ 
+						defer wg.Done()
+						getDiskMetrics(pids)
+				}()
 			default:
 				fmt.Printf("Unknown metric type: %s\n", source.Type)
 			}
 		}
 	}
+	wg.Wait()
 }
