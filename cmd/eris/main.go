@@ -68,6 +68,7 @@ func main() {
 				Enabled:        config.Network.Enabled,
 				CapturePackets: config.Network.CapturePackets,
 				Protocols:      config.Network.Protocols,
+				Interval: 		config.Metrics.Interval,
 			}
 
 			pluginsConfig := plugins.PluginsConfig{

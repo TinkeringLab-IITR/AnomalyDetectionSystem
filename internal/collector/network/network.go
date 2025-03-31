@@ -6,12 +6,14 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type NetworkConfig struct {
 	Enabled        bool
 	CapturePackets bool
 	Protocols      []string
+	Interval		int 
 }
 
 func StartNetworkTracing(config NetworkConfig, pids map[int]int) {
@@ -24,6 +26,9 @@ func StartNetworkTracing(config NetworkConfig, pids map[int]int) {
 	for _, protocol := range config.Protocols {
 		fmt.Printf("Observing protocol: %s\n", protocol)
 	}
+	ticker := time.NewTicker(time.Duration(config.Interval) * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
 	if config.CapturePackets {
 		fmt.Println("Packet capture is enabled.")
 		for _,pid := range pids {
@@ -36,6 +41,7 @@ func StartNetworkTracing(config NetworkConfig, pids map[int]int) {
 		}
 	}
 }
+}
 
 type NetworkUsage struct {
 	InterfaceName string
@@ -47,6 +53,7 @@ type PerProcessUsage struct {
 	PID            int
 	NetworkUsages  []NetworkUsage
 }
+
 
 func ProcessNetUsage(pid int) (PerProcessUsage, error) {
 	netUsage := PerProcessUsage{PID: pid}
