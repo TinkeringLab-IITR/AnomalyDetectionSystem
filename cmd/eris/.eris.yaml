@@ -1,0 +1,40 @@
+# Metadata
+project:
+  name: "My Web Application"
+  description: "A CRUD web application with observability via Eris"
+  owner: "Developer Name"
+  environment: "production"
+
+# Process identification
+process:
+  port: [8000,8001] 
+
+# Metrics collection
+metrics:
+  enabled: true
+  interval: 1
+  sources:
+    - type: "cpu"
+    - type: "memory"
+    - type: "disk"
+
+# Network tracing
+network:
+  enabled: true
+  capture_packets: false
+  protocols:
+    - "HTTP"
+    - "TCP"
+
+# plugins
+plugins:
+  enabled: true
+  list:
+    - name: "Redis Observer"
+      config:
+        host: "localhost"
+        port: 6379
+    - name: "Database Profiler"
+      config:
+        type: "PostgreSQL"
+        connection_string: "postgres://user:password@localhost:5432/mydb"

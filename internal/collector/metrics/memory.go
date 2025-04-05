@@ -50,3 +50,28 @@ func GetMemStat(pid int) (map[string]int, error) {
 	return memstat, nil
 
 }
+
+func GetVmRSS(pid int) float64 {
+	statfpath := fmt.Sprintf("/proc/%d/status", pid)
+	data, err := os.ReadFile(statfpath)
+	if err != nil {
+		return 0.0
+	}
+
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "VmRSS") {
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				memval, err := strconv.Atoi(parts[1])
+				if err != nil {
+					return 0.0
+				}
+				return float64(memval) 
+			}
+		}
+	}
+
+	return 0.0
+}
+

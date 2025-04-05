@@ -1,19 +1,37 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"log"
+	// "net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"eris/internal/collector/metrics"
 	"eris/internal/collector/network"
 	"eris/internal/collector/plugins"
 	"eris/internal/utils"
 
+	"eris/pb"
+	// "github.com/gorilla/websocket"
+
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	pbtime "google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func main() {
+	addr := "localhost:9999"
+    conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer conn.Close()
+
+    client := pb.NewOutliersClient(conn)
 	var configPath string
 
 	var rootCmd = &cobra.Command{
@@ -100,8 +118,42 @@ func main() {
 			go network.StartNetworkTracing(networkConfig, pids)
 			go plugins.LoadPlugins(pluginsConfig, pids)
 
+			if !metricsConfig.Enabled {
+				fmt.Println("Metrics collection is disabled.")
+				return
+			}
+			
+			ticker := time.NewTicker(time.Duration(metricsConfig.Interval) * time.Second)
+			defer ticker.Stop()
+			
+			for range ticker.C {
+				for _, pid := range pids {
+					go func(pid int) {
+						req := pb.OutliersRequest{
+							Metrics: send_metrics(pid),
+						}
+			
+						resp, err := client.Detect(context.Background(), &req)
+						if err != nil {
+							log.Printf("Error sending data for PID %d: %v", pid, err)
+							return
+						}
+						for _, pred := range resp.Prediction {
+							log.Printf("PID %d - %s prediction: %v",
+								pred.Pid,
+								pb.MetricType_name[int32(pred.Type)],
+								pred.Result)
+							
+						
+						}
+					}(pid)
+				}
+			}
+
 			select {}
+			
 		},
+		
 	}
 
 	rootCmd.Flags().StringVarP(&configPath, "path", "p", "", "Path to the configuration file (optional, defaults to .eris.yaml in current directory)")
@@ -111,3 +163,35 @@ func main() {
 		os.Exit(1)
 	}
 }
+func send_metrics(pid int) []*pb.Metric {
+    t := time.Now()
+	return []*pb.Metric{
+		{
+			Time:       Timestamp(t),
+			Metrictype: pb.MetricType_CPU,
+			Pid:        int32(pid),
+			Value:      metrics.GetCPUUsage(pid),
+		},
+		{
+			Time:       Timestamp(t),
+			Metrictype: pb.MetricType_MEMORY,
+			Pid:        int32(pid),
+			Value:      metrics.GetVmRSS(pid),
+		},
+		{
+			Time:       Timestamp(t),
+			Metrictype: pb.MetricType_DISK,
+			Pid:        int32(pid),
+			Value:      metrics.GetDiskUsage(pid),
+		},
+	}
+}
+
+// Timestamp converts time.Time to protobuf *Timestamp
+func Timestamp(t time.Time) *pbtime.Timestamp {
+    return &pbtime.Timestamp{
+        Seconds: t.Unix(),
+        Nanos:   int32(t.Nanosecond()),
+    }
+}
+

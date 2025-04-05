@@ -18,6 +18,40 @@ func getCPUMetrics(pids map[int]int) {
 		GetCPUStat(pid)
 	}
 }
+func GetCPUUsage(pid int) float64 {
+	statFields, err := ReadStats(pid)
+	if err != nil {
+		log.Fatal(err)
+	}
+	utime, _ := strconv.ParseFloat(statFields[13], 64)  // User time
+	stime, _ := strconv.ParseFloat(statFields[14], 64)  // System time
+	cutime, _ := strconv.ParseFloat(statFields[15], 64) // Child user time
+	cstime, _ := strconv.ParseFloat(statFields[16], 64) // Child system time
+
+	totalCPUTime := utime + stime + cutime + cstime
+	return totalCPUTime
+}
+// func GetCPUUsage(pids map[int]int) map[int]float64 {
+// 	cpuUsages := make(map[int]float64)
+
+// 	for _, pid := range pids {
+// 		statFields, err := ReadStats(pid)
+// 		if err != nil {
+// 			log.Printf("Error reading stats for PID %d: %v", pid, err)
+// 			continue
+// 		}
+
+// 		utime, _ := strconv.ParseFloat(statFields[13], 64)  // User time
+// 		stime, _ := strconv.ParseFloat(statFields[14], 64)  // System time
+// 		cutime, _ := strconv.ParseFloat(statFields[15], 64) // Child user time
+// 		cstime, _ := strconv.ParseFloat(statFields[16], 64) // Child system time
+
+// 		totalCPUTime := utime + stime + cutime + cstime
+// 		cpuUsages[pid] = totalCPUTime
+// 	}
+
+// 	return cpuUsages
+// }
 
 func GetCPUStat(pid int) {
 	statFields, err := ReadStats(pid)

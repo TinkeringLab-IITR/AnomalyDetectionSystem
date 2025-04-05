@@ -45,3 +45,30 @@ func getDiskUsage(pid int) (int64, error) {
 	}
 	return totalDiskUsage, nil
 }
+
+func GetDiskUsage(pid int) (float64) {
+	var procid int64 = int64(pid)
+	procDisk := fmt.Sprintf("/proc/%d/fd", procid)
+	fmt.Printf("Attempting to collect disk usage for pid : %d \n", pid)
+	files, err := os.ReadDir(procDisk)
+	if err != nil {
+		return 0
+	}
+	var totalDiskUsage float64
+	for _, file := range files {
+		procPath := filepath.Join(procDisk, file.Name())
+		target, err := os.Readlink(procPath)
+		if err != nil {
+			return 0
+		}
+		if strings.HasPrefix(target, "/") {
+			info, err := os.Stat(target)
+			if err != nil {
+				// return 0,fmt.Errorf("could not find stat continuing")
+				continue
+			}
+			totalDiskUsage += float64(info.Size())
+		}
+	}
+	return totalDiskUsage
+}

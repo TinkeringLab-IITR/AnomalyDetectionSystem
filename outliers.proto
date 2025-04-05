@@ -1,0 +1,35 @@
+syntax = "proto3";
+import "google/protobuf/timestamp.proto";
+package pb;
+
+option go_package = "eris/pb";
+
+enum MetricType {
+  CPU = 0;
+  MEMORY = 1;
+  DISK = 2;
+}
+
+message Metric {
+    google.protobuf.Timestamp time = 1;
+    MetricType metrictype = 2;
+    int32 pid =3;
+    double value = 4;
+}
+
+message OutliersRequest {
+    repeated Metric metrics = 1;
+}
+
+message Prediction {
+  int32 pid = 1;
+  MetricType type = 2;
+  int32 result = 3; // -1 for anomaly, 1 for normal
+}
+
+message OutliersResponse {
+  repeated Prediction prediction = 1;
+}
+service Outliers {
+    rpc Detect(OutliersRequest) returns (OutliersResponse) {}
+}
