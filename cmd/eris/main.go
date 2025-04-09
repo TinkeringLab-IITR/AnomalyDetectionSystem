@@ -194,4 +194,3 @@ func Timestamp(t time.Time) *pbtime.Timestamp {
         Nanos:   int32(t.Nanosecond()),
     }
 }
-

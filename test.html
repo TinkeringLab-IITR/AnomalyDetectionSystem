@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anomaly Detection Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .card {
+            background-color: #f5f5f5;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .metrics {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .metric-card {
+            flex: 1;
+            min-width: 250px;
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .status {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .normal {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .anomaly {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .log-container {
+            height: 300px;
+            overflow-y: auto;
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #dee2e6;
+            font-family: monospace;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Anomaly Detection Dashboard</h1>
+    
+    <div class="card">
+        <h2>Connection Status</h2>
+        <div id="connection-status">Disconnected</div>
+        <div>Last update: <span id="last-update">Never</span></div>
+    </div>
+    
+    <div class="controls card">
+        <h2>Test Controls</h2>
+        <button id="send-test-data">Send Test Data</button>
+        <input type="number" id="pid-input" placeholder="PID" value="840" />
+        <select id="metric-type">
+            <option value="CPU">CPU</option>
+            <option value="MEMORY">MEMORY</option>
+            <option value="DISK">DISK</option>
+        </select>
+        <input type="number" id="value-input" placeholder="Value" />
+    </div>
+
+    <div class="metrics">
+        <div class="metric-card">
+            <h3>CPU</h3>
+            <div class="metric-value" id="cpu-value">-</div>
+            <div>Status: <span class="status" id="cpu-status">-</span></div>
+        </div>
+        <div class="metric-card">
+            <h3>Memory</h3>
+            <div class="metric-value" id="memory-value">-</div>
+            <div>Status: <span class="status" id="memory-status">-</span></div>
+        </div>
+        <div class="metric-card">
+            <h3>Disk</h3>
+            <div class="metric-value" id="disk-value">-</div>
+            <div>Status: <span class="status" id="disk-status">-</span></div>
+        </div>
+    </div>
+    
+    <div class="card">
+        <h2>Message Log</h2>
+        <div class="log-container" id="log-container"></div>
+    </div>
+    
+    <script>
+        let socket = null;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+        
+        function connectWebSocket() {
+            // Connect to the WebSocket server
+            socket = new WebSocket('ws://localhost:8765');
+            
+            socket.onopen = function(e) {
+                console.log('WebSocket connection established');
+                document.getElementById('connection-status').textContent = 'Connected';
+                document.getElementById('connection-status').style.color = 'green';
+                reconnectAttempts = 0;
+                addLogEntry('Connected to WebSocket server');
+            };
+            
+            socket.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log('Received data:', data);
+                    
+                    // Update the UI with the received data
+                    updateUI(data);
+                    
+                    // Add to log
+                    addLogEntry('Received: ' + JSON.stringify(data, null, 2));
+                } catch (error) {
+                    console.error('Error parsing message:', error);
+                    addLogEntry('Error parsing message: ' + error.message);
+                }
+            };
+            
+            socket.onclose = function(event) {
+                document.getElementById('connection-status').textContent = 'Disconnected';
+                document.getElementById('connection-status').style.color = 'red';
+                console.log('WebSocket connection closed');
+                addLogEntry('Disconnected from WebSocket server');
+                
+                // Try to reconnect
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    const timeout = Math.pow(2, reconnectAttempts) * 1000;
+                    addLogEntry(`Attempting to reconnect in ${timeout/1000} seconds... (${reconnectAttempts}/${maxReconnectAttempts})`);
+                    setTimeout(connectWebSocket, timeout);
+                }
+            };
+            
+            socket.onerror = function(error) {
+                console.error('WebSocket error:', error);
+                addLogEntry('WebSocket error');
+            };
+        }
+        
+        function updateUI(data) {
+            // Update last update time
+            document.getElementById('last-update').textContent = data.timestamp || new Date().toLocaleTimeString();
+            
+            if (data.raw_data && data.prediction) {
+                const { metric_type, value } = data.raw_data;
+                const { result } = data.prediction;
+                
+                // Update the appropriate metric
+                const lowerMetricType = metric_type.toLowerCase();
+                const valueElement = document.getElementById(`${lowerMetricType}-value`);
+                const statusElement = document.getElementById(`${lowerMetricType}-status`);
+                
+                if (valueElement) {
+                    valueElement.textContent = value;
+                }
+                
+                if (statusElement) {
+                    const status = result === -1 ? 'Anomaly' : 'Normal';
+                    statusElement.textContent = status;
+                    statusElement.className = `status ${status.toLowerCase()}`;
+                }
+            }
+        }
+        
+        function addLogEntry(message) {
+            const logContainer = document.getElementById('log-container');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            logContainer.appendChild(entry);
+            
+            // Scroll to bottom
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            // Limit log entries
+            if (logContainer.children.length > 100) {
+                logContainer.removeChild(logContainer.children[0]);
+            }
+        }
+        
+        // Connect when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            connectWebSocket();
+            
+            // Set up the test data button
+            document.getElementById('send-test-data').addEventListener('click', function() {
+                if (!socket || socket.readyState !== WebSocket.OPEN) {
+                    addLogEntry('Cannot send data: WebSocket not connected');
+                    return;
+                }
+                
+                const pid = parseInt(document.getElementById('pid-input').value) || 840;
+                const metricType = document.getElementById('metric-type').value;
+                let value = parseFloat(document.getElementById('value-input').value);
+                
+                // Generate random values if none provided
+                if (isNaN(value)) {
+                    switch (metricType) {
+                        case 'CPU':
+                            value = Math.floor(Math.random() * 14000) + 14000;
+                            break;
+                        case 'MEMORY':
+                            value = Math.floor(Math.random() * 10000) + 630000;
+                            break;
+                        case 'DISK':
+                            value = Math.floor(Math.random() * 1000) + 23000;
+                            break;
+                    }
+                }
+                
+                const data = {
+                    pid: pid,
+                    metric_type: metricType,
+                    value: value
+                };
+                
+                socket.send(JSON.stringify(data));
+                addLogEntry(`Sent test data: ${JSON.stringify(data)}`);
+            });
+        });
+    </script>
+</body>
+</html>
