@@ -1,102 +1,19 @@
 "use client"
 
 import { useState } from "react"
-import { BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts"
-import { ArrowDown, ArrowUp, Minus } from "lucide-react"
-import  Network  from "./Network"
+import Network from "./Network"
 import CPU from "./CPU"
 import Memory from "./Memory"
 import Disk from "./Disk"
+import { useWebSocket } from "../app/websockets"
 
 const ProcessStat = () => {
   const [activeTab, setActiveTab] = useState("cpu")
+  const { isConnected } = useWebSocket()
 
   const dummyStats = {
-    pid: 459,
+    pid: 840,
     port: 27121,
-    
-    memory: {
-      vmPeak: "78370704 KB",
-      vmSize: "77108452 KB",
-      vmRSS: "617896 KB",
-      prediction: 1,
-    },
-    disk: {
-      usage: "32553 bytes",
-      prediction: 1,
-    },
-
-  }
-  
-  
-
-  // Format memory values for better readability
-  const formatMemory = (memoryString) => {
-    const value = Number.parseInt(memoryString.split(" ")[0])
-    if (value > 1000000) {
-      return `${(value / 1000000).toFixed(2)} GB`
-    } else if (value > 1000) {
-      return `${(value / 1000).toFixed(2)} MB`
-    }
-    return memoryString
-  }
-
-  // Prepare data for CPU chart
-  
-
-  // Prepare data for memory chart
-  const memoryData = [
-    {
-      name: "Peak",
-      value: Number.parseInt(dummyStats.memory.vmPeak.split(" ")[0]) / 1000, // Convert to MB for better visualization
-    },
-    {
-      name: "Size",
-      value: Number.parseInt(dummyStats.memory.vmSize.split(" ")[0]) / 1000,
-    },
-    {
-      name: "RSS",
-      value: Number.parseInt(dummyStats.memory.vmRSS.split(" ")[0]) / 1000,
-    },
-  ]
-  
-  
-
-  // Helper function to render prediction indicator
-  const renderPrediction = (value) => {
-    if (value === 1) {
-      return (
-        <div className="flex items-center text-green-600">
-          <ArrowUp className="h-4 w-4 mr-1" />
-          <span>Increasing</span>
-        </div>
-      )
-    } else if (value === -1) {
-      return (
-        <div className="flex items-center text-red-600">
-          <ArrowDown className="h-4 w-4 mr-1" />
-          <span>Decreasing</span>
-        </div>
-      )
-    }
-    return (
-      <div className="flex items-center text-gray-600">
-        <Minus className="h-4 w-4 mr-1" />
-        <span>Stable</span>
-      </div>
-    )
-  }
-
-  // Custom tooltip for charts
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white p-2 border rounded shadow-sm">
-          <p className="text-sm font-medium">{`${label}: ${payload[0].value}`}</p>
-        </div>
-      )
-    }
-    return null
   }
 
   return (
@@ -112,7 +29,9 @@ const ProcessStat = () => {
                 PID: {dummyStats.pid} • Port: {dummyStats.port}
               </p>
             </div>
-            <div className="bg-slate-900 px-3 py-1 rounded-full text-sm">Active</div>
+            <div className={`px-3 py-1 rounded-full text-sm ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}>
+              {isConnected ? 'Connected' : 'Disconnected'}
+            </div>
           </div>
         </div>
 
@@ -174,4 +93,3 @@ const ProcessStat = () => {
 }
 
 export default ProcessStat
-

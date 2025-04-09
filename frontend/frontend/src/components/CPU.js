@@ -1,11 +1,13 @@
 "use client"
 
 import React from "react"
-import {useState, useEffect} from "react"
+import { useState, useEffect } from "react"
 import { BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts"
 import { ArrowDown, ArrowUp, Minus } from "lucide-react"
+import { useWebSocket } from "../app/websockets"
 
 const CPU = () => {
+    const { metrics, sendTestData } = useWebSocket();
     const [stats, setStats] = useState({
         cpu: {
             userTime: 0,
@@ -17,23 +19,39 @@ const CPU = () => {
         }
     });
     
-    const dummyStats = {
-        cpu: {
-            userTime: 10657,
-            systemTime: 6219,
-            childUserTime: 3016,
-            childSystemTime: 1175,
-            totalCPUTime: 21067,
-            prediction: -1,
-        }
-    }
-    
     useEffect(() => {
-        // Simulate API fetch with timeout
-        setTimeout(() => {
-            setStats(dummyStats);
-        }, 500);
-    }, []);
+        // If we have CPU metrics from WebSocket, update our stats
+        if (metrics && metrics.cpu && metrics.cpu.latestValue) {
+            // In a real scenario, you would parse the metrics.cpu data appropriately
+            // This is a basic example - adjust the mapping based on your actual data structure
+            setStats({
+                cpu: {
+                    userTime: metrics.cpu.latestValue * 0.5, // Example calculation
+                    systemTime: metrics.cpu.latestValue * 0.3, // Example calculation
+                    childUserTime: metrics.cpu.latestValue * 0.15, // Example calculation
+                    childSystemTime: metrics.cpu.latestValue * 0.05, // Example calculation
+                    totalCPUTime: metrics.cpu.latestValue,
+                    prediction: metrics.cpu.status === 'Anomaly' ? -1 : 1,
+                }
+            });
+        } else {
+            // If no WebSocket data is available, fetch dummy data
+            // You could remove this block if you always want to use WebSocket data
+            setTimeout(() => {
+                const dummyStats = {
+                    cpu: {
+                        userTime: 10657,
+                        systemTime: 6219,
+                        childUserTime: 3016,
+                        childSystemTime: 1175,
+                        totalCPUTime: 21067,
+                        prediction: -1,
+                    }
+                };
+                setStats(dummyStats);
+            }, 500);
+        }
+    }, [metrics]);
     
     // Make sure CPU data is safely accessed
     const cpuData = [
@@ -77,9 +95,23 @@ const CPU = () => {
         }
         return null
     }
+    
+    // Function to request test data from WebSocket
+    const handleTestData = () => {
+        sendTestData('CPU');
+    }
 
     return(
         <div className="space-y-4">
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">CPU Usage</h2>
+                <button 
+                    onClick={handleTestData}
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                >
+                    Generate Test Data
+                </button>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <h3 className="text-lg font-medium mb-3">CPU Metrics</h3>
@@ -125,6 +157,21 @@ const CPU = () => {
                     </div>
                 </div>
             </div>
+            
+            {/* Optional: CPU History/Timeline Graph */}
+            {metrics?.cpu?.values?.length > 0 && (
+                <div className="mt-8">
+                    <h3 className="text-lg font-medium mb-3">CPU Usage History</h3>
+                    <div className="p-4 border rounded-md bg-gray-50">
+                        <p className="text-sm text-gray-600">
+                            {metrics.cpu.values.length} data points available
+                            • Latest Status: <span className={metrics.cpu.status === 'Normal' ? 'text-green-600' : 'text-red-600'}>
+                                {metrics.cpu.status}
+                            </span>
+                        </p>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

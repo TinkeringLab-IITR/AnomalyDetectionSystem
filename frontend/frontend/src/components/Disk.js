@@ -1,44 +1,49 @@
 "use client"
 
-import React from "react"
-import { useState, useEffect } from "react"
+import React, { useEffect, useState } from "react"
 import { ArrowDown, ArrowUp, Minus } from "lucide-react"
+import { useWebSocket } from "../app/websockets"
 
 const Disk = () => {
+    const { metrics, sendTestData } = useWebSocket();
+    
     const [stats, setStats] = useState({
         disk: {
             usage: "0 bytes",
             prediction: 0,
         }
     });
-    
-    const dummyStats = {
-        disk: {
-            usage: "32553 bytes",
-            prediction: 1,
-        }
-    }
-    
+
     useEffect(() => {
-        // Simulate API fetch with timeout
-        setTimeout(() => {
-            setStats(dummyStats);
-        }, 500);
-    }, []);
-    
-    // Format disk usage for display
+        if (metrics && metrics.disk && metrics.disk.latestValue) {
+            setStats({
+                disk: {
+                    usage: `${metrics.disk.latestValue} bytes`,
+                    prediction: metrics.disk.status === 'Anomaly' ? -1 : 1,
+                }
+            });
+        } else {
+            // fallback dummy stats
+            setTimeout(() => {
+                const dummyStats = {
+                    disk: {
+                        usage: "32553 bytes",
+                        prediction: 1,
+                    }
+                };
+                setStats(dummyStats);
+            }, 500);
+        }
+    }, [metrics]);
+
     const formatDiskUsage = (usage) => {
         if (!usage) return "0 bytes";
-        
         const value = Number.parseInt(usage.split(" ")[0]);
-        if (value > 1000000) {
-            return `${(value / 1000000).toFixed(2)} MB`;
-        } else if (value > 1000) {
-            return `${(value / 1000).toFixed(2)} KB`;
-        }
+        if (value > 1_000_000) return `${(value / 1_000_000).toFixed(2)} MB`;
+        if (value > 1_000) return `${(value / 1_000).toFixed(2)} KB`;
         return usage;
     }
-    
+
     const renderPrediction = (value) => {
         if (value === 1) {
             return (
@@ -63,8 +68,21 @@ const Disk = () => {
         )
     }
 
+    const handleTestData = () => {
+        sendTestData('Disk');
+    }
+
     return (
         <div className="space-y-4">
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">Disk Usage</h2>
+                <button 
+                    onClick={handleTestData}
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                >
+                    Generate Test Data
+                </button>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <h3 className="text-lg font-medium mb-3">Disk Metrics</h3>
@@ -91,8 +109,23 @@ const Disk = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Optional: Disk history summary */}
+            {metrics?.disk?.values?.length > 0 && (
+                <div className="mt-8">
+                    <h3 className="text-lg font-medium mb-3">Disk Usage History</h3>
+                    <div className="p-4 border rounded-md bg-gray-50">
+                        <p className="text-sm text-gray-600">
+                            {metrics.disk.values.length} data points available
+                            • Latest Status: <span className={metrics.disk.status === 'Normal' ? 'text-green-600' : 'text-red-600'}>
+                                {metrics.disk.status}
+                            </span>
+                        </p>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
 
-export default Disk
+export default Disk;
