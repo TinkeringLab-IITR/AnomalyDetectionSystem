@@ -130,7 +130,7 @@ func main() {
 				for _, pid := range pids {
 					go func(pid int) {
 						req := pb.OutliersRequest{
-							Metrics: send_metrics(pid),
+							Metrics: send_metrics_to_server(pid),
 						}
 			
 						resp, err := client.Detect(context.Background(), &req)
@@ -163,14 +163,15 @@ func main() {
 		os.Exit(1)
 	}
 }
-func send_metrics(pid int) []*pb.Metric {
-    t := time.Now()
+func send_metrics_to_server(pid int) []*pb.Metric {
+	t := time.Now()
+	_, _, _, _, totalCPUTime := metrics.GetCPUUsage(pid) // Assuming GetCPUUsage returns these values
 	return []*pb.Metric{
 		{
 			Time:       Timestamp(t),
 			Metrictype: pb.MetricType_CPU,
 			Pid:        int32(pid),
-			Value:      metrics.GetCPUUsage(pid),
+			Value:      totalCPUTime,
 		},
 		{
 			Time:       Timestamp(t),
@@ -186,6 +187,56 @@ func send_metrics(pid int) []*pb.Metric {
 		},
 	}
 }
+
+func send_metrics_to_websocket(pid int) []*pb.Metric {
+	t := time.Now()
+	utime, stime, cutime, cstime, totalCPUTime := metrics.GetCPUUsage(pid) // Assuming GetCPUUsage returns these values
+	return []*pb.Metric{
+		{
+			Time:       Timestamp(t),
+			Metrictype: pb.MetricType_CPU,
+			Pid:        int32(pid),
+			Value:      totalCPUTime,
+		},
+		{
+			Time:       Timestamp(t),
+			Metrictype: pb.MetricType_MEMORY,
+			Pid:        int32(pid),
+			Value:      metrics.GetVmRSS(pid),
+		},
+		{
+			Time:       Timestamp(t),
+			Metrictype: pb.MetricType_DISK,
+			Pid:        int32(pid),
+			Value:      metrics.GetDiskUsage(pid),
+		},
+		{
+			Time:       Timestamp(t),
+			Metrictype: pb.MetricType_CUSTOM,
+			Pid:        int32(pid),
+			Value:      float64(utime), // Sending utime
+		},
+		{
+			Time:       Timestamp(t),
+			Metrictype: pb.MetricType_CUSTOM,
+			Pid:        int32(pid),
+			Value:      float64(stime), // Sending stime
+		},
+		{
+			Time:       Timestamp(t),
+			Metrictype: pb.MetricType_CUSTOM,
+			Pid:        int32(pid),
+			Value:      float64(cutime), // Sending cutime
+		},
+		{
+			Time:       Timestamp(t),
+			Metrictype: pb.MetricType_CUSTOM,
+			Pid:        int32(pid),
+			Value:      float64(cstime), // Sending cstime
+		},
+	}
+}
+
 
 // Timestamp converts time.Time to protobuf *Timestamp
 func Timestamp(t time.Time) *pbtime.Timestamp {

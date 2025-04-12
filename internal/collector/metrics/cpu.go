@@ -29,7 +29,7 @@ func GetCPUUsage(pid int) float64 {
 	cstime, _ := strconv.ParseFloat(statFields[16], 64) // Child system time
 
 	totalCPUTime := utime + stime + cutime + cstime
-	return totalCPUTime
+	return utime,stime,cutime,cstime totalCPUTime
 }
 // func GetCPUUsage(pids map[int]int) map[int]float64 {
 // 	cpuUsages := make(map[int]float64)

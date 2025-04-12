@@ -35,12 +35,12 @@ const Memory = () => {
             setTimeout(() => {
                 const dummyStats = {
                     memory: {
-                        rss: 8245,
-                        heapTotal: 5632,
-                        heapUsed: 3948,
-                        external: 1217,
-                        totalMemory: 19042,
-                        prediction: 1,
+                        rss: 0,
+                        heapTotal: 0,
+                        heapUsed: 0,
+                        external: 0,
+                        totalMemory: 0,
+                        prediction: 0,
                     }
                 };
                 setStats(dummyStats);

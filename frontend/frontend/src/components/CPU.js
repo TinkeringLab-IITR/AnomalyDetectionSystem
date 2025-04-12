@@ -9,14 +9,14 @@ import { useWebSocket } from "../app/websockets"
 const CPU = () => {
     const { metrics, sendTestData } = useWebSocket();
     const [stats, setStats] = useState({
-        cpu: {
-            userTime: 0,
-            systemTime: 0,
-            childUserTime: 0,
-            childSystemTime: 0,
-            totalCPUTime: 0,
-            prediction: 0,
-        }
+            cpu: {
+                userTime: 0,
+                systemTime: 0,
+                childUserTime: 0,
+                childSystemTime: 0,
+                totalCPUTime: 0,
+                prediction: 0,
+            }
     });
     
     useEffect(() => {
@@ -40,12 +40,12 @@ const CPU = () => {
             setTimeout(() => {
                 const dummyStats = {
                     cpu: {
-                        userTime: 10657,
-                        systemTime: 6219,
-                        childUserTime: 3016,
-                        childSystemTime: 1175,
-                        totalCPUTime: 21067,
-                        prediction: -1,
+                        userTime: 0,
+                        systemTime: 0,
+                        childUserTime: 0,
+                        childSystemTime: 0,
+                        totalCPUTime: 0,
+                        prediction: 0,
                     }
                 };
                 setStats(dummyStats);

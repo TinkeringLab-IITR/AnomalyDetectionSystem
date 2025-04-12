@@ -27,8 +27,8 @@ const Disk = () => {
             setTimeout(() => {
                 const dummyStats = {
                     disk: {
-                        usage: "32553 bytes",
-                        prediction: 1,
+                        usage: "0 bytes",
+                        prediction: 0,
                     }
                 };
                 setStats(dummyStats);
