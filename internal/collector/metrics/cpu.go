@@ -18,7 +18,8 @@ func getCPUMetrics(pids map[int]int) {
 		GetCPUStat(pid)
 	}
 }
-func GetCPUUsage(pid int) float64 {
+
+func GetCPUUsage(pid int) (float64, float64, float64, float64, float64) {
 	statFields, err := ReadStats(pid)
 	if err != nil {
 		log.Fatal(err)
@@ -29,7 +30,7 @@ func GetCPUUsage(pid int) float64 {
 	cstime, _ := strconv.ParseFloat(statFields[16], 64) // Child system time
 
 	totalCPUTime := utime + stime + cutime + cstime
-	return utime,stime,cutime,cstime totalCPUTime
+	return utime,stime,cutime,cstime,totalCPUTime
 }
 // func GetCPUUsage(pids map[int]int) map[int]float64 {
 // 	cpuUsages := make(map[int]float64)

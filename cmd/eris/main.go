@@ -2,9 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
-	// "net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
@@ -15,23 +16,51 @@ import (
 	"eris/internal/utils"
 
 	"eris/pb"
-	// "github.com/gorilla/websocket"
 
+	"github.com/gorilla/websocket"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	pbtime "google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func main() {
-	addr := "localhost:9999"
-    conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer conn.Close()
+// WebSocketMessage represents the structure of data to be sent to the websocket server
+type WebSocketMessage struct {
+	PID        int     `json:"pid"`
+	MetricType string  `json:"metric_type"`
+	Value      float64 `json:"value"`
+	Prediction int32   `json:"prediction,omitempty"` // Added prediction field
+}
 
-    client := pb.NewOutliersClient(conn)
+func main() {
+	grpcAddr := "localhost:9999"
+	wsAddr := "ws://localhost:8765"
+	
+	// Set up gRPC connection
+	conn, err := grpc.Dial(grpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatal("Failed to connect to gRPC server:", err)
+	}
+	defer conn.Close()
+
+	client := pb.NewOutliersClient(conn)
+	
+	// Set up websocket connection
+	u, err := url.Parse(wsAddr)
+	if err != nil {
+		log.Fatal("Failed to parse WebSocket URL:", err)
+	}
+	
+	// Create WebSocket connection
+	wsConn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	if err != nil {
+		log.Println("Warning: Failed to connect to WebSocket server:", err)
+		// Continue execution even if WebSocket fails - we'll try to reconnect later
+	} else {
+		log.Println("Connected to WebSocket server at", wsAddr)
+		defer wsConn.Close()
+	}
+	
 	var configPath string
 
 	var rootCmd = &cobra.Command{
@@ -86,7 +115,7 @@ func main() {
 				Enabled:        config.Network.Enabled,
 				CapturePackets: config.Network.CapturePackets,
 				Protocols:      config.Network.Protocols,
-				Interval: 		config.Metrics.Interval,
+				Interval:       config.Metrics.Interval,
 			}
 
 			pluginsConfig := plugins.PluginsConfig{
@@ -129,31 +158,85 @@ func main() {
 			for range ticker.C {
 				for _, pid := range pids {
 					go func(pid int) {
+						// 1. Collect metrics for gRPC
+						metrics := send_metrics_to_server(pid)
+						
+						// 2. Send to gRPC server for anomaly detection
 						req := pb.OutliersRequest{
-							Metrics: send_metrics_to_server(pid),
+							Metrics: metrics,
 						}
 			
 						resp, err := client.Detect(context.Background(), &req)
 						if err != nil {
-							log.Printf("Error sending data for PID %d: %v", pid, err)
+							log.Printf("Error sending data for PID %d to gRPC server: %v", pid, err)
 							return
 						}
+						
+						// 3. Get and process predictions
+						predictions := make(map[pb.MetricType]int32)
 						for _, pred := range resp.Prediction {
 							log.Printf("PID %d - %s prediction: %v",
 								pred.Pid,
 								pb.MetricType_name[int32(pred.Type)],
 								pred.Result)
 							
+							predictions[pred.Type] = pred.Result
+						}
 						
+						// 4. Get metrics for WebSocket with the same format
+						wsMetrics := send_metrics_to_websocket(pid)
+						
+						// 5. Try to reconnect if WebSocket is disconnected
+						if wsConn == nil || wsConn.WriteMessage(websocket.PingMessage, nil) != nil {
+							log.Println("Attempting to reconnect to WebSocket server...")
+							wsConn, _, err = websocket.DefaultDialer.Dial(u.String(), nil)
+							if err != nil {
+								log.Println("Failed to reconnect to WebSocket server:", err)
+								return
+							}
+							log.Println("Successfully reconnected to WebSocket server")
+						}
+						
+						// 6. Send each metric with its prediction to WebSocket
+						for _, metric := range wsMetrics {
+							// Get prediction for this metric type if available
+							prediction, hasPrediction := predictions[metric.Metrictype]
+							
+							// Create message for WebSocket
+							wsMessage := WebSocketMessage{
+								PID:        int(metric.Pid),
+								MetricType: pb.MetricType_name[int32(metric.Metrictype)],
+								Value:      metric.Value,
+							}
+							
+							// Add prediction if available
+							if hasPrediction {
+								wsMessage.Prediction = prediction
+							}
+							
+							// Marshal to JSON
+							jsonMsg, err := json.Marshal(wsMessage)
+							if err != nil {
+								log.Printf("Error marshaling WebSocket message: %v", err)
+								continue
+							}
+							
+							// Send to WebSocket
+							err = wsConn.WriteMessage(websocket.TextMessage, jsonMsg)
+							if err != nil {
+								log.Printf("Error sending to WebSocket: %v", err)
+								wsConn = nil  // Mark for reconnection on next iteration
+								break
+							} else {
+								log.Printf("Sent metric data to WebSocket: %s", string(jsonMsg))
+							}
 						}
 					}(pid)
 				}
 			}
 
 			select {}
-			
 		},
-		
 	}
 
 	rootCmd.Flags().StringVarP(&configPath, "path", "p", "", "Path to the configuration file (optional, defaults to .eris.yaml in current directory)")
@@ -163,6 +246,7 @@ func main() {
 		os.Exit(1)
 	}
 }
+
 func send_metrics_to_server(pid int) []*pb.Metric {
 	t := time.Now()
 	_, _, _, _, totalCPUTime := metrics.GetCPUUsage(pid) // Assuming GetCPUUsage returns these values
@@ -212,31 +296,30 @@ func send_metrics_to_websocket(pid int) []*pb.Metric {
 		},
 		{
 			Time:       Timestamp(t),
-			Metrictype: pb.MetricType_CUSTOM,
+			Metrictype: pb.MetricType_CPU,
 			Pid:        int32(pid),
 			Value:      float64(utime), // Sending utime
 		},
 		{
 			Time:       Timestamp(t),
-			Metrictype: pb.MetricType_CUSTOM,
+			Metrictype: pb.MetricType_CPU,
 			Pid:        int32(pid),
 			Value:      float64(stime), // Sending stime
 		},
 		{
 			Time:       Timestamp(t),
-			Metrictype: pb.MetricType_CUSTOM,
+			Metrictype: pb.MetricType_CPU,
 			Pid:        int32(pid),
 			Value:      float64(cutime), // Sending cutime
 		},
 		{
 			Time:       Timestamp(t),
-			Metrictype: pb.MetricType_CUSTOM,
+			Metrictype: pb.MetricType_CPU,
 			Pid:        int32(pid),
 			Value:      float64(cstime), // Sending cstime
 		},
 	}
 }
-
 
 // Timestamp converts time.Time to protobuf *Timestamp
 func Timestamp(t time.Time) *pbtime.Timestamp {
