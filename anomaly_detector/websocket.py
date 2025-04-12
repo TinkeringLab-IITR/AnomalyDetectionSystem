@@ -44,12 +44,12 @@ outliers_client = OutliersClient('localhost:9999')
 async def broadcast_message(message):
     """Broadcast a message to all connected clients."""
     if connected_clients:
+        logger.info(f"Broadcasting message to {len(connected_clients)} clients")
         await asyncio.gather(
             *[client.send(message) for client in connected_clients],
             return_exceptions=True
         )
 
-# Fix: Removed the 'path' parameter since newer websockets versions don't use it
 async def handle_metric_data(websocket):
     """Handle WebSocket connection from clients."""
     connected_clients.add(websocket)
@@ -63,52 +63,68 @@ async def handle_metric_data(websocket):
     try:
         async for message in websocket:
             try:
+                logger.info(f"Received raw message: {message}")
                 data = json.loads(message)
                 
-                # Expected format: {"pid": 123, "metric_type": "CPU", "value": 75.5}
+                # Log the received data for debugging
+                logger.info(f"Received data: {data}")
+                
+                # Updated to handle the Go client's message format
+                # Expected format from Go client: {"pid": 123, "metric_type": "CPU", "value": 75.5, "sub_type": "total", "prediction": 1}
                 if all(k in data for k in ['pid', 'metric_type', 'value']):
                     pid = data['pid']
                     metric_type = data['metric_type']
                     value = float(data['value'])
+                    sub_type = data.get('sub_type', '')  # Optional field
+                    prediction = data.get('prediction')  # May already have prediction from Go client
                     
-                    # Convert metric_type string to enum value
-                    metric_type_enum = getattr(pb2.MetricType, metric_type)
+                    # Only send to gRPC server if we don't have a prediction yet
+                    if prediction is None:
+                        # Convert metric_type string to enum value
+                        try:
+                            metric_type_enum = getattr(pb2.MetricType, metric_type)
+                        except AttributeError:
+                            logger.warning(f"Unknown metric type: {metric_type}")
+                            continue
+                        
+                        # Create metric for gRPC request
+                        metric = pb2.Metric(
+                            pid=pid,
+                            metrictype=metric_type_enum,
+                            value=value
+                        )
+                        
+                        # Get prediction from gRPC server
+                        response = outliers_client.detect_anomalies([metric])
+                        
+                        if response and response.prediction:
+                            prediction = response.prediction[0].result
                     
-                    # Create metric for gRPC request
-                    metric = pb2.Metric(
-                        pid=pid,
-                        metrictype=metric_type_enum,
-                        value=value
-                    )
+                    # Create result with Go client data format
+                    result = {
+                        'timestamp': datetime.now().isoformat(),
+                        'pid': pid,
+                        'metric_type': metric_type,
+                        'value': value,
+                        'status': 'Anomaly' if prediction == -1 else 'Normal'
+                    }
                     
-                    # Get prediction from gRPC server
-                    response = outliers_client.detect_anomalies([metric])
+                    # Add sub_type if present
+                    if sub_type:
+                        result['sub_type'] = sub_type
+                        
+                    # Add prediction if available
+                    if prediction is not None:
+                        result['prediction'] = prediction
                     
-                    if response:
-                        # Process each prediction
-                        for prediction in response.prediction:
-                            result = {
-                                'timestamp': datetime.now().isoformat(),
-                                'raw_data': {
-                                    'pid': pid,
-                                    'metric_type': metric_type,
-                                    'value': value
-                                },
-                                'prediction': {
-                                    'pid': prediction.pid,
-                                    'type': pb2.MetricType.Name(prediction.type),
-                                    'result': prediction.result,
-                                    'status': 'Anomaly' if prediction.result == -1 else 'Normal'
-                                }
-                            }
-                            
-                            # Store in historical data
-                            historical_data['metrics'].append(result)
-                            if len(historical_data['metrics']) > MAX_HISTORY:
-                                historical_data['metrics'].pop(0)
-                            
-                            # Broadcast to all clients
-                            await broadcast_message(json.dumps(result))
+                    # Store in historical data
+                    historical_data['metrics'].append(result)
+                    if len(historical_data['metrics']) > MAX_HISTORY:
+                        historical_data['metrics'].pop(0)
+                    
+                    # Broadcast to all clients
+                    await broadcast_message(json.dumps(result))
+                    logger.info(f"Processed and broadcast metric: {result}")
                 else:
                     logger.warning(f"Invalid data format received: {data}")
                     
@@ -131,7 +147,7 @@ async def start_websocket_server():
     # Initialize history array
     historical_data['metrics'] = []
     
-    # Start the WebSocket server - Fix: Updated server creation syntax
+    # Start the WebSocket server
     async with websockets.serve(handle_metric_data, host, port):
         logger.info(f"WebSocket server started on ws://{host}:{port}")
         

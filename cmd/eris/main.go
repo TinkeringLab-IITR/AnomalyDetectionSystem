@@ -16,7 +16,7 @@ import (
 	"eris/internal/utils"
 
 	"eris/pb"
-
+	"google.golang.org/grpc/keepalive"
 	"github.com/gorilla/websocket"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
@@ -29,7 +29,14 @@ type WebSocketMessage struct {
 	PID        int     `json:"pid"`
 	MetricType string  `json:"metric_type"`
 	Value      float64 `json:"value"`
+	SubType    string  `json:"sub_type,omitempty"`
 	Prediction int32   `json:"prediction,omitempty"` // Added prediction field
+}
+
+// CPUMetric is used to track CPU metrics with their subtypes
+type CPUMetric struct {
+	Value   float64
+	SubType string
 }
 
 func main() {
@@ -37,7 +44,13 @@ func main() {
 	wsAddr := "ws://localhost:8765"
 	
 	// Set up gRPC connection
-	conn, err := grpc.Dial(grpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.Dial(grpcAddr, 
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:                10 * time.Second, // Send pings every 10 seconds if there is no activity
+			Timeout:             5 * time.Second,  // Wait 5 seconds for ping ack before considering the connection dead
+			PermitWithoutStream: true,             // Send pings even without active streams
+		}))
 	if err != nil {
 		log.Fatal("Failed to connect to gRPC server:", err)
 	}
@@ -183,8 +196,8 @@ func main() {
 							predictions[pred.Type] = pred.Result
 						}
 						
-						// 4. Get metrics for WebSocket with the same format
-						wsMetrics := send_metrics_to_websocket(pid)
+						// 4. Get metrics for WebSocket with the same format and CPU sub-metrics
+						wsMetrics, cpuSubMetrics := send_metrics_to_websocket_with_subtypes(pid)
 						
 						// 5. Try to reconnect if WebSocket is disconnected
 						if wsConn == nil || wsConn.WriteMessage(websocket.PingMessage, nil) != nil {
@@ -207,6 +220,21 @@ func main() {
 								PID:        int(metric.Pid),
 								MetricType: pb.MetricType_name[int32(metric.Metrictype)],
 								Value:      metric.Value,
+							}
+							
+							// Add SubType if this is a CPU metric
+							if metric.Metrictype == pb.MetricType_CPU {
+								// Find the matching CPU metric in our submetrics map
+								for _, cpuMetric := range cpuSubMetrics {
+									if cpuMetric.Value == metric.Value {
+										wsMessage.SubType = cpuMetric.SubType
+										break
+									}
+								}
+								// If no specific subtype was found, it's the total CPU time
+								if wsMessage.SubType == "" {
+									wsMessage.SubType = "total"
+								}
 							}
 							
 							// Add prediction if available
@@ -272,10 +300,21 @@ func send_metrics_to_server(pid int) []*pb.Metric {
 	}
 }
 
-func send_metrics_to_websocket(pid int) []*pb.Metric {
+// Modified function that returns both metrics and CPU sub-metrics with their types
+func send_metrics_to_websocket_with_subtypes(pid int) ([]*pb.Metric, []CPUMetric) {
 	t := time.Now()
-	utime, stime, cutime, cstime, totalCPUTime := metrics.GetCPUUsage(pid) // Assuming GetCPUUsage returns these values
-	return []*pb.Metric{
+	utime, stime, cutime, cstime, totalCPUTime := metrics.GetCPUUsage(pid)
+	
+	// Create CPU submetrics with their types for later reference
+	cpuSubMetrics := []CPUMetric{
+		{Value: float64(utime), SubType: "utime"},
+		{Value: float64(stime), SubType: "stime"},
+		{Value: float64(cutime), SubType: "cutime"},
+		{Value: float64(cstime), SubType: "cstime"},
+		{Value: totalCPUTime, SubType: "total"},
+	}
+	
+	metrics := []*pb.Metric{
 		{
 			Time:       Timestamp(t),
 			Metrictype: pb.MetricType_CPU,
@@ -319,6 +358,14 @@ func send_metrics_to_websocket(pid int) []*pb.Metric {
 			Value:      float64(cstime), // Sending cstime
 		},
 	}
+	
+	return metrics, cpuSubMetrics
+}
+
+// Keep the original function for backward compatibility
+func send_metrics_to_websocket(pid int) []*pb.Metric {
+	metrics, _ := send_metrics_to_websocket_with_subtypes(pid)
+	return metrics
 }
 
 // Timestamp converts time.Time to protobuf *Timestamp
