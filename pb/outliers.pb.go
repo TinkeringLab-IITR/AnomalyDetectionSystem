@@ -28,6 +28,7 @@ const (
 	MetricType_CPU    MetricType = 0
 	MetricType_MEMORY MetricType = 1
 	MetricType_DISK   MetricType = 2
+	MetricType_NETWORK MetricType = 3
 )
 
 // Enum value maps for MetricType.
@@ -36,11 +37,14 @@ var (
 		0: "CPU",
 		1: "MEMORY",
 		2: "DISK",
+		3: "NETWORK",
 	}
 	MetricType_value = map[string]int32{
 		"CPU":    0,
 		"MEMORY": 1,
 		"DISK":   2,
+		"DISK":    2,
+		"NETWORK": 3,
 	}
 )
 
