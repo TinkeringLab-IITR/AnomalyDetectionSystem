@@ -19,32 +19,23 @@ const Memory = () => {
     });
 
     useEffect(() => {
-        if (metrics && metrics.memory && metrics.memory.latestValue) {
-            const latest = metrics.memory.latestValue;
+        if (metrics && metrics.memory && metrics.memory.values && metrics.memory.values.length > 0) {
+            // Get the latest memory value
+            const latestMemData = metrics.memory.values[metrics.memory.values.length - 1];
+            const latest = latestMemData.value;
+            
+            // Since your server doesn't break down memory components,
+            // we'll use your existing proportional calculations
             setStats({
                 memory: {
-                    rss: latest * 0.4,
-                    heapTotal: latest * 0.3,
-                    heapUsed: latest * 0.2,
-                    external: latest * 0.1,
+                    rss: (latest * 0.4).toFixed(0),
+                    heapTotal: (latest * 0.3).toFixed(0),
+                    heapUsed: (latest * 0.2).toFixed(0),
+                    external: (latest * 0.1).toFixed(0),
                     totalMemory: latest,
-                    prediction: metrics.memory.status === 'Anomaly' ? -1 : 1,
+                    prediction: latestMemData.status === 'Anomaly' ? -1 : 1,
                 }
             });
-        } else {
-            setTimeout(() => {
-                const dummyStats = {
-                    memory: {
-                        rss: 0,
-                        heapTotal: 0,
-                        heapUsed: 0,
-                        external: 0,
-                        totalMemory: 0,
-                        prediction: 0,
-                    }
-                };
-                setStats(dummyStats);
-            }, 500);
         }
     }, [metrics]);
 
