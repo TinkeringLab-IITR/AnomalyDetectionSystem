@@ -1,4 +1,5 @@
 syntax = "proto3";
+
 import "google/protobuf/timestamp.proto";
 package pb;
 
@@ -8,28 +9,47 @@ enum MetricType {
   CPU = 0;
   MEMORY = 1;
   DISK = 2;
+  NETWORK = 3;
 }
 
 message Metric {
-    google.protobuf.Timestamp time = 1;
-    MetricType metrictype = 2;
-    int32 pid =3;
-    double value = 4;
+  google.protobuf.Timestamp time = 1;
+  MetricType metrictype = 2;
+  int32 pid = 3;
+  double value = 4; // For CPU %, Memory KB, Disk/Net bytes
 }
 
 message OutliersRequest {
-    repeated Metric metrics = 1;
+  repeated Metric metrics = 1;
 }
 
 message Prediction {
   int32 pid = 1;
   MetricType type = 2;
-  int32 result = 3; // -1 for anomaly, 1 for normal
+  int32 result = 3; // -1 = anomaly, 1 = normal
 }
 
 message OutliersResponse {
   repeated Prediction prediction = 1;
 }
+
 service Outliers {
-    rpc Detect(OutliersRequest) returns (OutliersResponse) {}
+  rpc Detect(OutliersRequest) returns (OutliersResponse) {}
+}
+
+
+// ----------------------------------
+// Optional: Detailed Network Metrics
+// ----------------------------------
+message NetworkMetric {
+  google.protobuf.Timestamp time = 1;
+  int32 pid = 2;
+  string interface_name = 3;
+  uint64 received = 4;    // RX bytes
+  uint64 transmitted = 5; // TX bytes
+}
+
+// Optional request type for rich network data
+message NetworkMetricsRequest {
+  repeated NetworkMetric metrics = 1;
 }
