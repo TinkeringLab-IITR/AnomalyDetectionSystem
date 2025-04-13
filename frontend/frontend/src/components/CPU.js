@@ -21,35 +21,46 @@ const CPU = () => {
     
     useEffect(() => {
         // If we have CPU metrics from WebSocket, update our stats
-        if (metrics && metrics.cpu && metrics.cpu.latestValue) {
-            // In a real scenario, you would parse the metrics.cpu data appropriately
-            // This is a basic example - adjust the mapping based on your actual data structure
+        if (metrics && metrics.cpu && metrics.cpu.values && metrics.cpu.values.length > 0) {
+            // Find the latest values for each CPU subtype
+            const cpuValues = metrics.cpu.values;
+            let userTime = 0;
+            let systemTime = 0;
+            let childUserTime = 0;
+            let childSystemTime = 0;
+            let totalCPUTime = 0;
+            
+            // Look for the most recent value of each subtype
+            for (let i = cpuValues.length - 1; i >= 0; i--) {
+                const item = cpuValues[i];
+                if (item.subType === 'utime' && userTime === 0) {
+                    userTime = item.value;
+                } else if (item.subType === 'stime' && systemTime === 0) {
+                    systemTime = item.value;
+                } else if (item.subType === 'cutime' && childUserTime === 0) {
+                    childUserTime = item.value;
+                } else if (item.subType === 'cstime' && childSystemTime === 0) {
+                    childSystemTime = item.value;
+                } else if (item.subType === 'total' && totalCPUTime === 0) {
+                    totalCPUTime = item.value;
+                }
+            }
+            
+            // If we don't have a total but have the components, calculate it
+            if (totalCPUTime === 0 && (userTime > 0 || systemTime > 0 || childUserTime > 0 || childSystemTime > 0)) {
+                totalCPUTime = userTime + systemTime + childUserTime + childSystemTime;
+            }
+            
             setStats({
                 cpu: {
-                    userTime: metrics.cpu.latestValue * 0.5, // Example calculation
-                    systemTime: metrics.cpu.latestValue * 0.3, // Example calculation
-                    childUserTime: metrics.cpu.latestValue * 0.15, // Example calculation
-                    childSystemTime: metrics.cpu.latestValue * 0.05, // Example calculation
-                    totalCPUTime: metrics.cpu.latestValue,
+                    userTime,
+                    systemTime,
+                    childUserTime,
+                    childSystemTime,
+                    totalCPUTime,
                     prediction: metrics.cpu.status === 'Anomaly' ? -1 : 1,
                 }
             });
-        } else {
-            // If no WebSocket data is available, fetch dummy data
-            // You could remove this block if you always want to use WebSocket data
-            setTimeout(() => {
-                const dummyStats = {
-                    cpu: {
-                        userTime: 0,
-                        systemTime: 0,
-                        childUserTime: 0,
-                        childSystemTime: 0,
-                        totalCPUTime: 0,
-                        prediction: 0,
-                    }
-                };
-                setStats(dummyStats);
-            }, 500);
         }
     }, [metrics]);
     
