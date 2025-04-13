@@ -15,24 +15,16 @@ const Disk = () => {
     });
 
     useEffect(() => {
-        if (metrics && metrics.disk && metrics.disk.latestValue) {
+        if (metrics && metrics.disk && metrics.disk.values && metrics.disk.values.length > 0) {
+            // Get the latest disk value
+            const latestDiskData = metrics.disk.values[metrics.disk.values.length - 1];
+            
             setStats({
                 disk: {
-                    usage: `${metrics.disk.latestValue} bytes`,
-                    prediction: metrics.disk.status === 'Anomaly' ? -1 : 1,
+                    usage: `${latestDiskData.value} bytes`,
+                    prediction: latestDiskData.status === 'Anomaly' ? -1 : 1,
                 }
             });
-        } else {
-            // fallback dummy stats
-            setTimeout(() => {
-                const dummyStats = {
-                    disk: {
-                        usage: "0 bytes",
-                        prediction: 0,
-                    }
-                };
-                setStats(dummyStats);
-            }, 500);
         }
     }, [metrics]);
 
