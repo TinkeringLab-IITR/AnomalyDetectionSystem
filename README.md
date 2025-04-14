@@ -31,15 +31,10 @@ Take note of the port number that will be needed for the next step.
 
 ### 3. Configure YAML File
 
-Rename the YAML template file to `.eris.yaml`:
+Rename the YAML template file to `.eris.yaml` and update the port number with the one you identified in step 2::
 
 ```bash
-mv eris.yaml.template .eris.yaml
-```
-
-Open the `.eris.yaml` file and update the port number with the one you identified in step 2:
-
-```bash
+mv .eris.example.yaml .eris.yaml
 nano .eris.yaml
 ```
 
@@ -66,7 +61,7 @@ cp .eris.yaml bin/
 Navigate to the anomaly detection directory and set up a Python virtual environment:
 
 ```bash
-cd anomaly_detection
+cd anomaly_detector
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
@@ -82,7 +77,7 @@ python anomaly_server.py
 Open a new terminal and run:
 
 ```bash
-cd anomaly_detection
+cd anomaly_detector
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 python websockets.py
 ```
