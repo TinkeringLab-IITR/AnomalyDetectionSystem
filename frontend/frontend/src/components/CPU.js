@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { BarChart, Bar, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts"
-import { ArrowDown, ArrowUp, Minus } from "lucide-react"
+import { ArrowDown, ArrowUp, Minus,AlertTriangle,Wifi } from "lucide-react"
 import { useWebSocket } from "../app/websockets"
 
 const CPU = ({ metrics }) => {
@@ -152,6 +152,16 @@ const CPU = ({ metrics }) => {
 
       <div className="relative">
         <div className="flex justify-between items-center mb-4">
+        <div className="absolute top-0 right-0 p-(-1)">
+                    <div className={`flex items-center gap-2 px-4 py-2 rounded-full border ${
+                        metrics?.cpu?.status === 'Anomaly' 
+                        ? 'border-red-500 bg-red-900/20 text-red-400' 
+                        : 'border-green-500 bg-green-900/20 text-green-400'
+                    }`}>
+                        {metrics?.cpu?.status === 'Anomaly' && <AlertTriangle className="h-5 w-5" />}
+                        <span className="font-bold">Status: {metrics?.cpu?.status || 'Normal'}</span>
+                    </div>
+                </div>
           <h2 className="text-xl font-semibold text-green-400">CPU Usage</h2>
           {/* <button
             onClick={handleTestData}

@@ -6,7 +6,8 @@ import CPU from "./CPU"
 import Memory from "./Memory"
 import Disk from "./Disk"
 import { useWebSocket } from "../app/websockets"
-import { Cpu, Database, HardDrive, Share2 } from "lucide-react"
+import { Cpu, Database, HardDrive, Share2, Home } from "lucide-react"
+import Link from "next/link"
 
 const ProcessStat = ({ pid }) => {
   const [activeTab, setActiveTab] = useState("cpu")
@@ -41,12 +42,21 @@ const ProcessStat = ({ pid }) => {
         />
         
         <div className="flex justify-between items-center relative">
-          <div>
-            <h2 className="text-2xl font-bold font-mono">PROCESS MONITOR</h2>
-            <p className="text-green-400 mt-1 font-mono">
-              PID: <span className="text-green-500">{pid}</span> | STATUS: <span className="text-green-500">ACTIVE</span>
-            </p>
+          <div className="flex items-center space-x-4">
+            
+            <div>
+              <h2 className="text-2xl font-bold font-mono">PROCESS MONITOR</h2>
+              <p className="text-green-400 mt-1 font-mono">
+                PID: <span className="text-green-500">{pid}</span> | STATUS: <span className="text-green-500">ACTIVE</span>
+              </p>
+            </div>
           </div>
+          <Link href="/">
+              <button className="flex items-center px-3 py-2 bg-green-900/40 text-green-400 border border-green-500/70 rounded hover:bg-green-800/50 transition-colors">
+                <Home className="w-5 h-5 mr-2" />
+                <span className="font-mono">DASHBOARD</span>
+              </button>
+            </Link>
           <div className={`px-3 py-1 rounded font-mono text-sm ${isConnected ? 'bg-green-900 text-green-400 border border-green-500' : 'bg-red-900 text-red-400 border border-red-500'}`}>
             {isConnected ? '█ CONNECTED' : '▢ DISCONNECTED'}
           </div>

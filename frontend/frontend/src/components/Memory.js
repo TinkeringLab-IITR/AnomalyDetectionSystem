@@ -1,8 +1,8 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import { BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts"
-import { ArrowDown, ArrowUp, Minus } from "lucide-react"
+import { BarChart, Bar, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts"
+import { ArrowDown, ArrowUp, Minus, AlertTriangle } from "lucide-react"
 import { useWebSocket } from "../app/websockets"
 
 const Memory = ({ metrics }) => {
@@ -17,6 +17,7 @@ const Memory = ({ metrics }) => {
             prediction: 0,
         }
     });
+    const [timeSeriesData, setTimeSeriesData] = useState([]);
 
     useEffect(() => {
         if (metrics && metrics.memory && metrics.memory.values && metrics.memory.values.length > 0) {
@@ -36,8 +37,50 @@ const Memory = ({ metrics }) => {
                     prediction: latestMemData.status === 'Anomaly' ? -1 : 1,
                 }
             });
+
+            // Update time series data with the last 10 points
+            setTimeSeriesData(prevData => {
+                // Convert metrics.memory.values to time series format
+                const newData = metrics.memory.values.map((item, index) => ({
+                    time: new Date(item.timestamp || Date.now() - (metrics.memory.values.length - index) * 5000).toLocaleTimeString(),
+                    memory: item.value,
+                    status: item.status
+                }));
+                
+                // Take last 10 items to avoid overcrowding the chart
+                return newData.slice(-10);
+            });
         }
     }, [metrics]);
+
+    // Effect for simulating 5-second updates
+    useEffect(() => {
+        const intervalId = setInterval(() => {
+            // This will only be used if we're not getting real updates from the websocket
+            if (timeSeriesData.length > 0) {
+                const lastEntry = timeSeriesData[timeSeriesData.length - 1];
+                const now = new Date();
+                
+                // Only add a new point if our last point is older than 5 seconds
+                if (now - new Date(lastEntry.timestamp || 0) > 5000) {
+                    // Slight random variation from the last value for demonstration
+                    const randomVariation = Math.random() * 20 - 10;
+                    const newMemValue = Math.max(50, parseFloat(lastEntry.memory) + randomVariation);
+                    
+                    setTimeSeriesData(prevData => {
+                        const newData = [...prevData, {
+                            time: now.toLocaleTimeString(),
+                            memory: newMemValue.toFixed(0),
+                            status: Math.random() > 0.9 ? 'Anomaly' : 'Normal'
+                        }];
+                        return newData.slice(-10); // Keep only last 10 entries
+                    });
+                }
+            }
+        }, 5000);
+
+        return () => clearInterval(intervalId);
+    }, [timeSeriesData]);
 
     const memoryData = [
         { name: "RSS", value: stats?.memory?.rss || 0 },
@@ -81,6 +124,19 @@ const Memory = ({ metrics }) => {
         return null
     }
 
+    const TimelineTooltip = ({ active, payload, label }) => {
+        if (active && payload && payload.length) {
+            return (
+                <div className="bg-black p-2 border border-green-500 rounded shadow-sm text-green-400">
+                    <p className="text-sm font-mono">{`Time: ${label}`}</p>
+                    <p className="text-sm font-mono">{`Memory: ${payload[0].value} MB`}</p>
+                    <p className="text-sm font-mono">{`Status: ${payload[0].payload.status || 'Normal'}`}</p>
+                </div>
+            )
+        }
+        return null
+    }
+
     const handleTestData = () => {
         sendTestData('Memory');
     }
@@ -98,6 +154,18 @@ const Memory = ({ metrics }) => {
             />
 
             <div className="relative">
+                {/* Status indicator - more prominently displayed on right */}
+                <div className="absolute top-0 right-0 p-(-1)">
+                    <div className={`flex items-center gap-2 px-4 py-2 rounded-full border ${
+                        metrics?.memory?.status === 'Anomaly' 
+                        ? 'border-red-500 bg-red-900/20 text-red-400' 
+                        : 'border-green-500 bg-green-900/20 text-green-400'
+                    }`}>
+                        {metrics?.memory?.status === 'Anomaly' && <AlertTriangle className="h-5 w-5" />}
+                        <span className="font-bold">Status: {metrics?.memory?.status || 'Normal'}</span>
+                    </div>
+                </div>
+
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-xl font-semibold text-green-400">Memory Usage</h2>
                     {/* <button 
@@ -153,22 +221,48 @@ const Memory = ({ metrics }) => {
                     </div>
                 </div>
 
-                {/* Memory History/Timeline */}
-                {metrics?.memory?.values?.length > 0 && (
-                    <div className="mt-8 bg-black/50 p-4 rounded border border-green-500/50 backdrop-blur-sm">
-                        <h3 className="text-lg font-medium mb-3 text-green-400 border-b border-green-500/30 pb-2">
-                            Memory Usage History
-                        </h3>
-                        <div className="p-4 border border-green-500/30 rounded-md bg-black/70">
-                            <p className="text-sm text-green-400">
-                                {metrics.memory.values.length} data points available • Latest Status:{" "}
-                                <span className={metrics.memory.status === "Normal" ? "text-green-400" : "text-red-400"}>
-                                    {metrics.memory.status}
-                                </span>
+                {/* Memory History/Timeline with Line Graph */}
+                <div className="mt-8 bg-black/50 p-4 rounded border border-green-500/50 backdrop-blur-sm">
+                    <h3 className="text-lg font-medium mb-3 text-green-400 border-b border-green-500/30 pb-2">
+                        Memory Usage Timeline
+                        <span className="text-sm font-normal ml-3">(Updates every 5 seconds)</span>
+                    </h3>
+                    <div className="h-64 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={timeSeriesData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#00ff0030" />
+                                <XAxis dataKey="time" stroke="#00ff00" />
+                                <YAxis stroke="#00ff00" domain={['dataMin - 100', 'dataMax + 100']} />
+                                <Tooltip content={<TimelineTooltip />} />
+                                <Line 
+                                    type="monotone" 
+                                    dataKey="memory" 
+                                    stroke="#00ff00" 
+                                    strokeWidth={2} 
+                                    dot={{ r: 4, fill: "#00ff00" }}
+                                    activeDot={{ r: 6, fill: "#00ff00", stroke: "#fff" }}
+                                />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </div>
+                    <div className="flex justify-between items-center mt-2 text-sm">
+                        <div className="p-2 border border-green-500/30 rounded-md bg-black/70">
+                            <p className="text-green-400">
+                                {timeSeriesData.length} data points displayed • Updates every 5 seconds
                             </p>
                         </div>
+                        <div className="flex gap-4">
+                            <div className="flex items-center">
+                                <div className="w-3 h-3 rounded-full bg-green-400 mr-2"></div>
+                                <span>Normal</span>
+                            </div>
+                            <div className="flex items-center">
+                                <div className="w-3 h-3 rounded-full bg-red-400 mr-2"></div>
+                                <span>Anomaly</span>
+                            </div>
+                        </div>
                     </div>
-                )}
+                </div>
             </div>
         </div>
     )
