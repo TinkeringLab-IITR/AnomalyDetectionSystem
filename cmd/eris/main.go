@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"eris/internal/collector/metrics"
@@ -64,15 +65,76 @@ func main() {
 		log.Fatal("Failed to parse WebSocket URL:", err)
 	}
 	
-	// Create WebSocket connection
-	wsConn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
-	if err != nil {
-		log.Println("Warning: Failed to connect to WebSocket server:", err)
-		// Continue execution even if WebSocket fails - we'll try to reconnect later
-	} else {
+	var wsConn *websocket.Conn
+	connectWebSocket := func() (*websocket.Conn, error) {
+		conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+		if err != nil {
+			log.Printf("Warning: WebSocket connection failed: %v", err)
+			return nil, err
+		}
 		log.Println("Connected to WebSocket server at", wsAddr)
-		defer wsConn.Close()
+		return conn, nil
 	}
+
+	// Try initial connection
+	wsConn, _ = connectWebSocket()
+	
+	// Create a channel for websocket messages with reasonable buffer
+	wsMessageChan := make(chan []byte, 100)
+	
+	// Create a context with cancel for clean shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	
+	// Start a single goroutine to handle all websocket writes
+	go func() {
+		reconnectDelay := time.Second
+		maxReconnectDelay := 30 * time.Second
+		
+		for {
+			select {
+			case <-ctx.Done():
+				if wsConn != nil {
+					wsConn.Close()
+				}
+				return
+				
+			case msg := <-wsMessageChan:
+				// If connection is nil or sending fails, try to reconnect
+				if wsConn == nil {
+					newConn, err := connectWebSocket()
+					if err != nil {
+						// Use exponential backoff for reconnection attempts
+						log.Printf("Will retry connection in %v", reconnectDelay)
+						time.Sleep(reconnectDelay)
+						reconnectDelay = min(reconnectDelay*2, maxReconnectDelay)
+						continue
+					}
+					
+					wsConn = newConn
+					reconnectDelay = time.Second // Reset delay on successful connection
+				}
+				
+				// Send the message
+				err := wsConn.WriteMessage(websocket.TextMessage, msg)
+				if err != nil {
+					log.Printf("Error sending to WebSocket: %v", err)
+					wsConn.Close()
+					wsConn = nil
+					
+					// Put the message back in the channel to retry later
+					// Use non-blocking send to avoid deadlocks
+					select {
+					case wsMessageChan <- msg:
+					default:
+						log.Println("Warning: WebSocket message buffer full, dropping message")
+					}
+				} else {
+					log.Printf("Sent metric data to WebSocket: %s", string(msg))
+				}
+			}
+		}
+	}()
 	
 	var configPath string
 
@@ -168,9 +230,14 @@ func main() {
 			ticker := time.NewTicker(time.Duration(metricsConfig.Interval) * time.Second)
 			defer ticker.Stop()
 			
+			// Create a WaitGroup to track active goroutines
+			var wg sync.WaitGroup
+			
 			for range ticker.C {
 				for _, pid := range pids {
+					wg.Add(1)
 					go func(pid int) {
+						defer wg.Done()
 						// 1. Collect metrics for gRPC
 						metrics := send_metrics_to_server(pid)
 						
@@ -199,18 +266,7 @@ func main() {
 						// 4. Get metrics for WebSocket with the same format and CPU sub-metrics
 						wsMetrics, cpuSubMetrics := send_metrics_to_websocket_with_subtypes(pid)
 						
-						// 5. Try to reconnect if WebSocket is disconnected
-						if wsConn == nil || wsConn.WriteMessage(websocket.PingMessage, nil) != nil {
-							log.Println("Attempting to reconnect to WebSocket server...")
-							wsConn, _, err = websocket.DefaultDialer.Dial(u.String(), nil)
-							if err != nil {
-								log.Println("Failed to reconnect to WebSocket server:", err)
-								return
-							}
-							log.Println("Successfully reconnected to WebSocket server")
-						}
-						
-						// 6. Send each metric with its prediction to WebSocket
+						// 5. Process and send each metric with its prediction to WebSocket
 						for _, metric := range wsMetrics {
 							// Get prediction for this metric type if available
 							prediction, hasPrediction := predictions[metric.Metrictype]
@@ -249,18 +305,21 @@ func main() {
 								continue
 							}
 							
-							// Send to WebSocket
-							err = wsConn.WriteMessage(websocket.TextMessage, jsonMsg)
-							if err != nil {
-								log.Printf("Error sending to WebSocket: %v", err)
-								wsConn = nil  // Mark for reconnection on next iteration
-								break
-							} else {
-								log.Printf("Sent metric data to WebSocket: %s", string(jsonMsg))
+							// Send to channel instead of directly to WebSocket
+							select {
+							case wsMessageChan <- jsonMsg:
+								// Message sent to channel successfully
+							default:
+								// Channel buffer is full - log warning
+								log.Printf("WebSocket message channel full, dropping message for PID %d", pid)
 							}
 						}
 					}(pid)
 				}
+				
+				// Optional: wait for all goroutines to finish before next tick
+				// Uncomment if you want to ensure all processing is done before the next tick
+				// wg.Wait()
 			}
 
 			select {}
@@ -273,6 +332,14 @@ func main() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+}
+
+// Helper function for min duration
+func min(a, b time.Duration) time.Duration {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func send_metrics_to_server(pid int) []*pb.Metric {
