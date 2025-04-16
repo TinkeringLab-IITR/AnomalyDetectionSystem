@@ -4,8 +4,8 @@ import React, { useEffect, useState } from "react"
 import { ArrowDown, ArrowUp, Minus } from "lucide-react"
 import { useWebSocket } from "../app/websockets"
 
-const Disk = () => {
-    const { metrics, sendTestData } = useWebSocket();
+const Disk = ({ metrics }) => {
+    const { sendTestData } = useWebSocket();
     
     const [stats, setStats] = useState({
         disk: {

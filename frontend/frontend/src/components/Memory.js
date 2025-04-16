@@ -5,8 +5,8 @@ import { BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContaine
 import { ArrowDown, ArrowUp, Minus } from "lucide-react"
 import { useWebSocket } from "../app/websockets"
 
-const Memory = () => {
-    const { metrics, sendTestData } = useWebSocket();
+const Memory = ({ metrics }) => {
+    const {sendTestData } = useWebSocket();
     const [stats, setStats] = useState({
         memory: {
             rss: 0,

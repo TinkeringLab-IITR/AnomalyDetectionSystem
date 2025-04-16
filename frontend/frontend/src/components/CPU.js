@@ -1,68 +1,68 @@
 "use client"
 
-import React from "react"
-import { useState, useEffect } from "react"
-import { BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts"
+import React, { useState, useEffect } from "react"
+import {
+  BarChart,
+  Bar,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts"
 import { ArrowDown, ArrowUp, Minus } from "lucide-react"
 import { useWebSocket } from "../app/websockets"
 
-const CPU = () => {
-    const { metrics, sendTestData } = useWebSocket();
-    const [stats, setStats] = useState({
-            cpu: {
-                userTime: 0,
-                systemTime: 0,
-                childUserTime: 0,
-                childSystemTime: 0,
-                totalCPUTime: 0,
-                prediction: 0,
-            }
-    });
-    
-    useEffect(() => {
-        // If we have CPU metrics from WebSocket, update our stats
-        if (metrics && metrics.cpu && metrics.cpu.values && metrics.cpu.values.length > 0) {
-            // Find the latest values for each CPU subtype
-            const cpuValues = metrics.cpu.values;
-            let userTime = 0;
-            let systemTime = 0;
-            let childUserTime = 0;
-            let childSystemTime = 0;
-            let totalCPUTime = 0;
-            
-            // Look for the most recent value of each subtype
-            for (let i = cpuValues.length - 1; i >= 0; i--) {
-                const item = cpuValues[i];
-                if (item.subType === 'utime' && userTime === 0) {
-                    userTime = item.value;
-                } else if (item.subType === 'stime' && systemTime === 0) {
-                    systemTime = item.value;
-                } else if (item.subType === 'cutime' && childUserTime === 0) {
-                    childUserTime = item.value;
-                } else if (item.subType === 'cstime' && childSystemTime === 0) {
-                    childSystemTime = item.value;
-                } else if (item.subType === 'total' && totalCPUTime === 0) {
-                    totalCPUTime = item.value;
-                }
-            }
-            
-            // If we don't have a total but have the components, calculate it
-            if (totalCPUTime === 0 && (userTime > 0 || systemTime > 0 || childUserTime > 0 || childSystemTime > 0)) {
-                totalCPUTime = userTime + systemTime + childUserTime + childSystemTime;
-            }
-            
-            setStats({
-                cpu: {
-                    userTime,
-                    systemTime,
-                    childUserTime,
-                    childSystemTime,
-                    totalCPUTime,
-                    prediction: metrics.cpu.status === 'Anomaly' ? -1 : 1,
-                }
-            });
-        }
-    }, [metrics]);
+// Accept metrics as a prop here
+const CPU = ({ metrics }) => {
+  const { sendTestData } = useWebSocket()
+  const [stats, setStats] = useState({
+    cpu: {
+      userTime: 0,
+      systemTime: 0,
+      childUserTime: 0,
+      childSystemTime: 0,
+      totalCPUTime: 0,
+      prediction: 0,
+    },
+  })
+
+  useEffect(() => {
+    if (metrics?.cpu?.values?.length > 0) {
+      const cpuValues = metrics.cpu.values
+      let userTime = 0,
+        systemTime = 0,
+        childUserTime = 0,
+        childSystemTime = 0,
+        totalCPUTime = 0
+
+      for (let i = cpuValues.length - 1; i >= 0; i--) {
+        const item = cpuValues[i]
+        if (item.subType === "utime" && userTime === 0) userTime = item.value
+        else if (item.subType === "stime" && systemTime === 0) systemTime = item.value
+        else if (item.subType === "cutime" && childUserTime === 0) childUserTime = item.value
+        else if (item.subType === "cstime" && childSystemTime === 0) childSystemTime = item.value
+        else if (item.subType === "total" && totalCPUTime === 0) totalCPUTime = item.value
+      }
+
+      if (totalCPUTime === 0)
+        totalCPUTime = userTime + systemTime + childUserTime + childSystemTime
+
+      setStats({
+        cpu: {
+          userTime,
+          systemTime,
+          childUserTime,
+          childSystemTime,
+          totalCPUTime,
+          prediction: metrics.cpu.status === "Anomaly" ? -1 : 1,
+        },
+      })
+
+      console.log("CPU component received metrics:", metrics)
+    }
+  }, [metrics])
+
     
     // Make sure CPU data is safely accessed
     const cpuData = [
