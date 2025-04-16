@@ -18,7 +18,7 @@ export const WebSocketProvider = ({ children }) => {
 
     socketRef.current.onmessage = (event) => {
       const incomingData = JSON.parse(event.data);
-      console.log("WebSocket received data:", incomingData);
+      // console.log("WebSocket received data:", incomingData);
       const { pid, metric_type, value, sub_type, prediction } = incomingData;
       
       // Format as expected by your components

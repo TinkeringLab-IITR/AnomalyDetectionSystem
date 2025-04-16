@@ -6,6 +6,7 @@ import CPU from "./CPU"
 import Memory from "./Memory"
 import Disk from "./Disk"
 import { useWebSocket } from "../app/websockets"
+import { Cpu, Database, HardDrive, Share2 } from "lucide-react"
 
 const ProcessStat = ({ pid }) => {
   const [activeTab, setActiveTab] = useState("cpu")
@@ -16,55 +17,99 @@ const ProcessStat = ({ pid }) => {
 
   // Check if data exists for the given PID
   const isDataReady = stats && Object.keys(stats).length > 0
-  // In ProcessStat component:
-// console.log("dataByPid:", dataByPid);
-// console.log("stats for this PID:", stats);
+
+  // Tab configuration with icons
+  const tabs = [
+    { id: "cpu", label: "CPU", icon: <Cpu className="w-5 h-5 mr-2" /> },
+    { id: "memory", label: "MEMORY", icon: <Database className="w-5 h-5 mr-2" /> },
+    { id: "disk", label: "DISK", icon: <HardDrive className="w-5 h-5 mr-2" /> },
+    { id: "network", label: "NETWORK", icon: <Share2 className="w-5 h-5 mr-2" /> }
+  ]
+
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-        <div className="bg-gradient-to-r from-slate-800 to-slate-700 text-white p-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <h2 className="text-2xl font-bold">Process Statistics</h2>
-              <p className="text-slate-200 mt-1">
-                PID: {pid}
-              </p>
-            </div>
-            <div className={`px-3 py-1 rounded-full text-sm ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}>
-              {isConnected ? 'Connected' : 'Disconnected'}
-            </div>
+    <div className="fixed inset-0 bg-black text-green-400 flex flex-col">
+      {/* Header */}
+      <div className="bg-black text-green-400 p-4 border-b border-green-500/50 relative overflow-hidden">
+        {/* Grid background */}
+        <div
+          className="absolute inset-0 opacity-10"
+          style={{
+            backgroundImage:
+              "linear-gradient(to right, #00ff00 1px, transparent 1px), linear-gradient(to bottom, #00ff00 1px, transparent 1px)",
+            backgroundSize: "20px 20px",
+          }}
+        />
+        
+        <div className="flex justify-between items-center relative">
+          <div>
+            <h2 className="text-2xl font-bold font-mono">PROCESS MONITOR</h2>
+            <p className="text-green-400 mt-1 font-mono">
+              PID: <span className="text-green-500">{pid}</span> | STATUS: <span className="text-green-500">ACTIVE</span>
+            </p>
+          </div>
+          <div className={`px-3 py-1 rounded font-mono text-sm ${isConnected ? 'bg-green-900 text-green-400 border border-green-500' : 'bg-red-900 text-red-400 border border-red-500'}`}>
+            {isConnected ? '█ CONNECTED' : '▢ DISCONNECTED'}
           </div>
         </div>
+      </div>
 
-        <div className="p-6">
+      {/* Main content area with left sidebar */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left sidebar with tabs */}
+        <div className="w-48 border-r border-green-500/30 bg-black flex flex-col">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              className={`flex items-center px-4 py-4 font-medium ${
+                activeTab === tab.id
+                  ? "bg-green-900/30 text-green-400 border-l-4 border-green-500"
+                  : "text-green-500/60 hover:text-green-400 hover:bg-green-900/20"
+              }`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.icon}
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Main content */}
+        <div className="flex-1 p-6 overflow-auto bg-black font-mono">
           {!isDataReady ? (
-            <div className="text-center text-slate-500 py-12">Loading stats for PID {pid}...</div>
-          ) : (
-            <>
-              <div className="flex border-b mb-6">
-                {["cpu", "memory", "disk", "network"].map((tab) => (
-                  <button
-                    key={tab}
-                    className={`px-4 py-2 font-medium ${
-                      activeTab === tab
-                        ? "border-b-2 border-slate-700 text-slate-800"
-                        : "text-slate-500"
-                    }`}
-                    onClick={() => setActiveTab(tab)}
-                  >
-                    {tab.charAt(0).toUpperCase() + tab.slice(1)} Usage
-                  </button>
-                ))}
+            <div className="text-center py-12 h-full flex items-center justify-center">
+              <div className="inline-block relative">
+                <span className="animate-pulse">Loading stats for PID {pid}...</span>
+                <span className="animate-blink ml-1">▌</span>
               </div>
-
+            </div>
+          ) : (
+            <div className="h-full">
               {activeTab === "cpu" && <CPU metrics={{cpu: stats?.cpu}} />}
               {activeTab === "memory" && <Memory metrics={{memory: stats?.memory}} />}
               {activeTab === "disk" && <Disk metrics={{disk: stats?.disk}} />}
               {activeTab === "network" && <Network metrics={{network: stats?.network}} />}
-            </>
+            </div>
           )}
         </div>
       </div>
+
+      {/* Global styles */}
+      <style jsx global>{`
+        body {
+          margin: 0;
+          padding: 0;
+          overflow: hidden;
+        }
+        
+        @keyframes blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
+        }
+        
+        .animate-blink {
+          animation: blink 1s step-end infinite;
+        }
+      `}</style>
     </div>
   )
 }
