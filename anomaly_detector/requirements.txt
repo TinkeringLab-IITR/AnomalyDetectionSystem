@@ -2,3 +2,5 @@ grpcio-tools
 numpy
 scikit-learn
 pandas
+websocket
+websockets
